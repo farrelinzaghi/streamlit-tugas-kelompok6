@@ -9,6 +9,16 @@ Kelompok      : Kelompok 6
 
 Cara menjalankan:
     streamlit run app_kelompok6.py
+
+CATATAN PERBAIKAN:
+    Dataset asli (complete_data.csv) berada pada LEVEL SEKOLAH (satu baris =
+    satu sekolah), dengan kolom: province_name, city_name, district_name,
+    school_name, stage, status, lat, long, province_area, total_population,
+    total_education_age_population.
+
+    Tidak ada kolom "jumlah_sekolah" siap pakai, sehingga data WAJIB
+    diagregasi per provinsi terlebih dahulu (menghitung jumlah baris sekolah
+    per provinsi) sebelum bisa dipakai dalam regresi tingkat provinsi.
 ==============================================================================
 """
 
@@ -95,7 +105,8 @@ with tab_data:
 
     st.caption(
         "Dataset yang digunakan adalah data riil sebaran sekolah per provinsi "
-        "di Indonesia (`complete_data.csv`), bukan data simulasi."
+        "di Indonesia (`complete_data.csv`), bukan data simulasi. Data berada "
+        "pada level SEKOLAH (satu baris = satu sekolah)."
     )
 
     @st.cache_data
@@ -133,31 +144,49 @@ with tab_data:
 
     st.subheader("Inspeksi Awal Data (Level Sekolah)")
     st.caption(f"Sumber data: `{sumber_data}`")
-    st.write(f"**Dimensi Dataset:** {df_mentah.shape[0]:,} Baris, {df_mentah.shape[1]} Kolom")
+    st.write(f"**Dimensi Dataset (level sekolah):** {df_mentah.shape[0]:,} Baris, {df_mentah.shape[1]} Kolom")
     st.dataframe(df_mentah.head(10), use_container_width=True)
 
 # ------------------------------------------------------------------------------
-# TAHAP 3 — DATA CLEANING
+# TAHAP 3 — DATA CLEANING & AGREGASI
 # ------------------------------------------------------------------------------
 with tab_cleaning:
     st.header("🧹 Data Cleaning")
 
+    st.subheader("Agregasi Data ke Level Provinsi")
+    st.caption(
+        "Karena target analisis adalah 'jumlah sekolah per provinsi', data level "
+        "sekolah diagregasi terlebih dahulu: jumlah_sekolah dihitung dari banyaknya "
+        "baris sekolah per provinsi, sedangkan penduduk usia sekolah, total "
+        "penduduk, dan luas wilayah diambil nilainya (konstan per provinsi)."
+    )
+
+    df_provinsi = df_mentah.groupby("province_name").agg(
+        jumlah_sekolah=("school_name", "count"),
+        penduduk_usia_sekolah=("total_education_age_population", "first"),
+        total_penduduk=("total_population", "first"),
+        luas_wilayah=("province_area", "first"),
+    ).reset_index()
+
+    st.dataframe(df_provinsi, use_container_width=True)
+    st.write(f"**Dimensi Dataset (level provinsi):** {df_provinsi.shape[0]} Baris, {df_provinsi.shape[1]} Kolom")
+
     kolom_numerik = ["penduduk_usia_sekolah", "total_penduduk", "luas_wilayah", "jumlah_sekolah"]
 
     st.subheader("Pengecekan Missing Values")
-    st.dataframe(df.isnull().sum().rename("jumlah_missing"), use_container_width=True)
+    st.dataframe(df_provinsi.isnull().sum().rename("jumlah_missing"), use_container_width=True)
 
     st.subheader("Pengecekan Duplikasi Data")
-    st.write(f"Jumlah baris duplikat: **{df.duplicated().sum()}**")
+    st.write(f"Jumlah baris duplikat: **{df_provinsi.duplicated().sum()}**")
 
-    df_bersih = df.copy()
+    df_bersih = df_provinsi.copy()
     for col in kolom_numerik:
         df_bersih = df_bersih[df_bersih[col] >= 0]
 
     st.subheader("Validasi Logis")
     st.write("Data numerik divalidasi agar tidak bernilai negatif.")
     c1, c2 = st.columns(2)
-    c1.metric("Baris Sebelum Cleaning", len(df))
+    c1.metric("Baris Sebelum Cleaning", len(df_provinsi))
     c2.metric("Baris Setelah Cleaning", len(df_bersih))
 
 # ------------------------------------------------------------------------------
@@ -166,7 +195,7 @@ with tab_cleaning:
 with tab_eda:
     st.header("📊 Exploratory Data Analysis (EDA)")
 
-    st.subheader("Tabel Statistik Deskriptif Nasional")
+    st.subheader("Tabel Statistik Deskriptif Nasional (per Provinsi)")
     deskriptif = df_bersih[kolom_numerik].describe().T[["mean", "std", "min", "50%", "max"]]
     deskriptif.columns = ["Rata-rata", "Std Deviasi", "Minimum", "Median", "Maksimum"]
     st.dataframe(deskriptif, use_container_width=True)
@@ -303,7 +332,8 @@ with tab_kesimpulan:
         Penelitian ini belum mengontrol aspek fiskal daerah (contoh: APBD) dan
         tipografi geografis (kepulauan vs kontinental). Penelitian selanjutnya
         direkomendasikan menyertakan variabel ekonomi makro untuk meningkatkan
-        akurasi R-squared model.
+        akurasi R-squared model. Perlu dicatat pula bahwa unit analisis di sini
+        adalah 34 provinsi, sehingga ukuran sampel relatif kecil untuk regresi.
         """
     )
 
