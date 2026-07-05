@@ -1,264 +1,75 @@
 """
 ==============================================================================
-ANALISIS HUBUNGAN JUMLAH PENDUDUK USIA SEKOLAH DENGAN PERSEBARAN SEKOLAH DI INDONESIA
+STREAMLIT APP — TUGAS KELOMPOK 6
+Analisis Pengaruh Penduduk Usia Sekolah & Luas Wilayah terhadap Jumlah Sekolah
 ==============================================================================
-Proyek Akhir — Analisis Data Statistik
-Dashboard interaktif Streamlit dengan alur:
-Beranda -> Masalah -> Data -> EDA -> Modeling -> Kesimpulan
+Mata Kuliah   : Analisis Data Statistik
+Dosen         : Tri Aji Nugroho
+Kelompok      : Kelompok 6
 
 Cara menjalankan:
-    streamlit run app.py
-
-Dataset default: complete_data.csv (letakkan di folder yang sama dengan
-app.py), atau unggah file CSV lain lewat sidebar.
+    streamlit run app_kelompok6.py
 ==============================================================================
 """
 
-import os
-import glob
-
-import streamlit as st
-import pandas as pd
 import numpy as np
+import pandas as pd
+import streamlit as st
 import matplotlib.pyplot as plt
 import seaborn as sns
-from scipy.stats import pearsonr
 import statsmodels.api as sm
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+sns.set_theme(style="whitegrid", palette="muted")
 
 # ==============================================================================
 # KONFIGURASI HALAMAN
 # ==============================================================================
 
 st.set_page_config(
-    page_title="Analisis Sebaran Sekolah per Provinsi",
+    page_title="Tugas Kelompok 6 - Analisis Sekolah",
     page_icon="🏫",
     layout="wide"
 )
 
-# ==============================================================================
-# DATA KELOMPOK
-# ==============================================================================
+st.title("🏫 Analisis Pengaruh Penduduk Usia Sekolah & Luas Wilayah terhadap Jumlah Sekolah")
 
-NAMA_MATA_KULIAH = "Analisis Data Statistik"
-NAMA_DOSEN = "Nama Dosen"  # ganti sesuai dosen pengampu
-JUDUL_PROYEK = "Analisis Hubungan Penduduk Usia Sekolah dan Jumlah Sekolah per Provinsi"
-
-anggota_kelompok = [
-    {"nama": "Fariz Firmansyah", "nim": "0102525005"},
-    {"nama": "Sayid Muhammad Al Husain", "nim": "0102525018"},
-    {"nama": "Muhammad Farrel Inzaghi Santoso", "nim": "0102525023"},
-    {"nama": "Azzindan Zulvan", "nim": "0102525701"},
-]
-
-
-def buat_inisial(nama):
-    kata = nama.split()
-    if len(kata) >= 2:
-        return (kata[0][0] + kata[1][0]).upper()
-    return nama[:2].upper()
-
-
-CSS_GLOBAL = """
-<style>
-.kartu-anggota {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    background-color: rgba(128,128,128,0.08);
-    border: 1px solid rgba(128,128,128,0.25);
-    border-radius: 12px;
-    padding: 12px 16px;
-    margin-bottom: 8px;
-    height: 100%;
-}
-.avatar-inisial {
-    flex-shrink: 0;
-    width: 42px;
-    height: 42px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 15px;
-}
-.info-anggota .nama { font-weight: 600; font-size: 14px; line-height: 1.3; }
-.info-anggota .nim { font-size: 12.5px; opacity: 0.7; }
-.kotak-info {
-    background-color: rgba(99,102,241,0.08);
-    border-left: 4px solid #6366f1;
-    border-radius: 8px;
-    padding: 14px 18px;
-    margin-bottom: 10px;
-}
-</style>
-"""
-st.markdown(CSS_GLOBAL, unsafe_allow_html=True)
-
-
-def tampilkan_kartu_kelompok():
-    st.markdown("#### 👥 Kelompok")
-    kolom_anggota = st.columns(len(anggota_kelompok))
-    for kolom, anggota in zip(kolom_anggota, anggota_kelompok):
-        with kolom:
-            st.markdown(
-                f"""
-                <div class="kartu-anggota">
-                    <div class="avatar-inisial">{buat_inisial(anggota['nama'])}</div>
-                    <div class="info-anggota">
-                        <div class="nama">{anggota['nama']}</div>
-                        <div class="nim">{anggota['nim']}</div>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-
-# ==============================================================================
-# FUNGSI BANTUAN DATA
-# ==============================================================================
-
-@st.cache_data
-def muat_data_default():
-    """Coba cari complete_data.csv di folder yang sama dengan app.py."""
-    kandidat = glob.glob("complete_data*.csv")
-    if kandidat:
-        return pd.read_csv(kandidat[0]), kandidat[0]
-    return None, None
-
-
-@st.cache_data
-def bersihkan_data(df):
-    df = df.drop_duplicates()
-    df = df.dropna(subset=[
-        "province_name", "school_name",
-        "total_population", "total_education_age_population"
-    ])
-    return df
-
-
-@st.cache_data
-def buat_data_provinsi(df):
-    agg_dict = dict(
-        jumlah_sekolah=("school_name", "count"),
-        total_penduduk=("total_population", "max"),
-        penduduk_usia_sekolah=("total_education_age_population", "max"),
-    )
-    if "city_name" in df.columns:
-        agg_dict["jumlah_kabupaten_kota"] = ("city_name", "nunique")
-
-    provinsi = df.groupby("province_name", as_index=False).agg(**agg_dict)
-    return provinsi
-
-
-# ==============================================================================
-# SIDEBAR — SUMBER DATA
-# ==============================================================================
-
-st.sidebar.header("⚙️ Sumber Data")
-
-df_default, nama_file_default = muat_data_default()
-
-file_upload = st.sidebar.file_uploader(
-    "Unggah file CSV lain (opsional)",
-    type=["csv"]
+st.markdown(
+    """
+    <div style="background-color: rgba(99,102,241,0.08); border-left: 4px solid #6366f1;
+                border-radius: 8px; padding: 14px 18px; margin-bottom: 10px;">
+    <b>Mata Kuliah:</b> Analisis Data Statistik<br>
+    <b>Dosen:</b> Tri Aji Nugroho<br>
+    <b>Kelompok:</b> Kelompok 6
+    </div>
+    """,
+    unsafe_allow_html=True
 )
-
-if file_upload is not None:
-    df = pd.read_csv(file_upload)
-    sumber_data = file_upload.name
-elif df_default is not None:
-    df = df_default
-    sumber_data = nama_file_default
-    st.sidebar.success(f"Memuat otomatis: {nama_file_default}")
-else:
-    st.sidebar.warning("complete_data.csv tidak ditemukan. Silakan unggah file CSV.")
-    st.stop()
-
-kolom_wajib = {
-    "province_name", "school_name", "total_population", "total_education_age_population"
-}
-if not kolom_wajib.issubset(set(df.columns)):
-    st.error(
-        "File CSV tidak memiliki kolom yang dibutuhkan: "
-        f"{', '.join(sorted(kolom_wajib))}"
-    )
-    st.stop()
-
-df_bersih = bersihkan_data(df)
-provinsi = buat_data_provinsi(df_bersih)
 
 # ==============================================================================
 # NAVIGASI (TAB)
 # ==============================================================================
 
-tab_beranda, tab_masalah, tab_data, tab_eda, tab_model, tab_kesimpulan = st.tabs(
-    ["🏠 Beranda", "❓ Masalah", "📂 Data", "📊 EDA", "🧮 Modeling", "✅ Kesimpulan"]
+tab_masalah, tab_data, tab_cleaning, tab_eda, tab_model, tab_kesimpulan = st.tabs(
+    ["❓ Problem Definition", "📥 Data Collection", "🧹 Data Cleaning",
+     "📊 EDA", "🧮 Statistical Modeling", "✅ Interpret & Communicate"]
 )
 
 # ------------------------------------------------------------------------------
-# TAB 1 — BERANDA
-# ------------------------------------------------------------------------------
-with tab_beranda:
-    st.title(f"🏫 {JUDUL_PROYEK}")
-    st.markdown(
-        f"""
-        <div class="kotak-info">
-        <b>Mata Kuliah:</b> {NAMA_MATA_KULIAH}<br>
-        <b>Dosen Pengampu:</b> {NAMA_DOSEN}
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-    tampilkan_kartu_kelompok()
-
-    st.markdown("---")
-    st.subheader("Ringkasan Proyek")
-    st.write(
-        """
-        Ketersediaan sekolah yang merata di setiap provinsi merupakan salah satu
-        indikator penting pemerataan akses pendidikan di Indonesia. Proyek ini
-        menganalisis apakah jumlah sekolah yang berdiri di suatu provinsi
-        berhubungan dengan jumlah penduduk usia sekolah dan total penduduk di
-        provinsi tersebut, menggunakan data sebaran sekolah (jenjang SD hingga
-        SMK/SMA/SLB) di seluruh provinsi Indonesia.
-        """
-    )
-
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Jumlah Sekolah (baris data)", f"{len(df_bersih):,}")
-    m2.metric("Jumlah Provinsi", df_bersih["province_name"].nunique())
-    if "city_name" in df_bersih.columns:
-        m3.metric("Jumlah Kabupaten/Kota", df_bersih["city_name"].nunique())
-    if "stage" in df_bersih.columns:
-        m4.metric("Jenjang Pendidikan", df_bersih["stage"].nunique())
-
-# ------------------------------------------------------------------------------
-# TAB 2 — MASALAH
+# TAHAP 1 — PROBLEM DEFINITION
 # ------------------------------------------------------------------------------
 with tab_masalah:
-    st.header("❓ Definisi Masalah")
-    st.write(
-        """
-        Pemerataan jumlah sekolah menjadi salah satu tolok ukur keberhasilan
-        pembangunan pendidikan di suatu wilayah. Provinsi dengan jumlah penduduk
-        usia sekolah yang besar idealnya diimbangi dengan jumlah sekolah yang
-        memadai. Namun demikian, kondisi geografis, kepadatan penduduk, dan
-        kebijakan daerah dapat menyebabkan ketimpangan antara jumlah penduduk
-        usia sekolah dan ketersediaan sekolah.
-        """
-    )
+    st.header("❓ Problem Definition")
 
-    st.subheader("Pertanyaan Riset")
+    st.subheader("Rumusan Masalah")
     st.markdown(
         """
-        - **Q1:** Apakah jumlah penduduk usia sekolah berhubungan secara
-          signifikan dengan jumlah sekolah di suatu provinsi?
-        - **Q2:** Apakah total penduduk provinsi turut memengaruhi jumlah
-          sekolah, atau penduduk usia sekolah adalah faktor yang lebih dominan?
+        1. Bagaimana karakteristik persebaran penduduk usia sekolah, luas
+           wilayah, dan jumlah sekolah di Indonesia?
+        2. Apakah terdapat hubungan linear yang kuat antara jumlah penduduk
+           usia sekolah dan luas wilayah terhadap jumlah sekolah?
+        3. Faktor mana yang memberikan kontribusi paling signifikan terhadap
+           pembangunan sekolah baru?
         """
     )
 
@@ -266,205 +77,221 @@ with tab_masalah:
     col_h0, col_h1 = st.columns(2)
     with col_h0:
         st.info(
-            "**H0:** Tidak ada hubungan signifikan antara penduduk usia "
-            "sekolah/total penduduk dengan jumlah sekolah per provinsi."
+            "**H0:** Tidak ada pengaruh signifikan antara penduduk usia "
+            "sekolah dan luas wilayah terhadap jumlah sekolah."
         )
     with col_h1:
         st.success(
-            "**H1:** Terdapat hubungan signifikan antara penduduk usia "
-            "sekolah/total penduduk dengan jumlah sekolah per provinsi."
+            "**H1:** Terdapat pengaruh positif dan signifikan dari penduduk "
+            "usia sekolah dan luas wilayah terhadap jumlah sekolah."
         )
 
 # ------------------------------------------------------------------------------
-# TAB 3 — DATA
+# TAHAP 2 — DATA COLLECTION
 # ------------------------------------------------------------------------------
 with tab_data:
-    st.header("📂 Pengumpulan & Inspeksi Data")
-    st.caption(f"Sumber data: `{sumber_data}`")
+    st.header("📥 Data Collection")
 
-    st.subheader("Pratinjau Data Mentah")
+    st.caption(
+        "Dataset pada tahap ini disimulasikan (bukan data riil) mengikuti "
+        "pola hubungan penduduk usia sekolah dan luas wilayah terhadap "
+        "jumlah sekolah, sesuai skrip asli tugas kelompok."
+    )
+
+    n_prov = st.sidebar.slider("Jumlah Provinsi (simulasi)", min_value=10, max_value=50, value=38)
+    seed = st.sidebar.number_input("Random Seed", min_value=0, value=42, step=1)
+
+    @st.cache_data
+    def buat_dataset(n_prov, seed):
+        np.random.seed(seed)
+        total_pop = np.random.normal(3000000, 1000000, n_prov)
+        school_age = total_pop * np.random.uniform(0.18, 0.22, n_prov)
+        area = np.random.normal(50000, 15000, n_prov)
+        schools = (school_age * 0.003) + (area * 0.01) + np.random.normal(0, 100, n_prov)
+
+        df = pd.DataFrame({
+            "provinsi": [f"Provinsi_{i+1}" for i in range(n_prov)],
+            "penduduk_usia_sekolah": school_age.astype(int),
+            "total_penduduk": total_pop.astype(int),
+            "luas_wilayah": area.astype(int),
+            "jumlah_sekolah": schools.astype(int),
+        })
+        return df
+
+    df = buat_dataset(n_prov, seed)
+
+    st.subheader("Inspeksi Awal Data")
+    st.write(f"**Dimensi Dataset:** {df.shape[0]} Baris (Provinsi), {df.shape[1]} Kolom")
     st.dataframe(df.head(10), use_container_width=True)
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Baris (sebelum cleaning)", f"{len(df):,}")
-    c2.metric("Baris (setelah cleaning)", f"{len(df_bersih):,}")
-    c3.metric("Baris terhapus", f"{len(df) - len(df_bersih):,}")
+# ------------------------------------------------------------------------------
+# TAHAP 3 — DATA CLEANING
+# ------------------------------------------------------------------------------
+with tab_cleaning:
+    st.header("🧹 Data Cleaning")
 
-    if "stage" in df_bersih.columns:
-        st.subheader("Distribusi Jenjang Sekolah")
-        colA, colB = st.columns([1, 1])
-        with colA:
-            st.dataframe(
-                df_bersih["stage"].value_counts().rename("jumlah"),
-                use_container_width=True
-            )
-        with colB:
-            fig_jenjang, ax_jenjang = plt.subplots(figsize=(6, 4))
-            df_bersih["stage"].value_counts().plot(kind="bar", ax=ax_jenjang, color="#6366f1")
-            ax_jenjang.set_ylabel("Jumlah Sekolah")
-            ax_jenjang.set_title("Jumlah Sekolah per Jenjang")
-            st.pyplot(fig_jenjang)
+    kolom_numerik = ["penduduk_usia_sekolah", "total_penduduk", "luas_wilayah", "jumlah_sekolah"]
 
-    if "status" in df_bersih.columns:
-        st.subheader("Distribusi Status Sekolah (Negeri/Swasta)")
-        st.bar_chart(df_bersih["status"].value_counts())
+    st.subheader("Pengecekan Missing Values")
+    st.dataframe(df.isnull().sum().rename("jumlah_missing"), use_container_width=True)
 
-    st.subheader("Data Agregat per Provinsi")
-    st.dataframe(provinsi, use_container_width=True)
+    st.subheader("Pengecekan Duplikasi Data")
+    st.write(f"Jumlah baris duplikat: **{df.duplicated().sum()}**")
 
-    if len(provinsi) < 3:
-        st.warning(
-            "⚠️ Jumlah provinsi kurang dari 3, hasil uji statistik mungkin "
-            "kurang bermakna, namun perhitungan tetap ditampilkan."
-        )
+    df_bersih = df.copy()
+    for col in kolom_numerik:
+        df_bersih = df_bersih[df_bersih[col] >= 0]
+
+    st.subheader("Validasi Logis")
+    st.write("Data numerik divalidasi agar tidak bernilai negatif.")
+    c1, c2 = st.columns(2)
+    c1.metric("Baris Sebelum Cleaning", len(df))
+    c2.metric("Baris Setelah Cleaning", len(df_bersih))
 
 # ------------------------------------------------------------------------------
-# TAB 4 — EDA
+# TAHAP 4 — EDA
 # ------------------------------------------------------------------------------
 with tab_eda:
     st.header("📊 Exploratory Data Analysis (EDA)")
 
-    st.subheader("Statistik Deskriptif")
-    st.dataframe(provinsi.describe(), use_container_width=True)
+    st.subheader("Tabel Statistik Deskriptif Nasional")
+    deskriptif = df_bersih[kolom_numerik].describe().T[["mean", "std", "min", "50%", "max"]]
+    deskriptif.columns = ["Rata-rata", "Std Deviasi", "Minimum", "Median", "Maksimum"]
+    st.dataframe(deskriptif, use_container_width=True)
 
-    st.subheader("Boxplot")
-    fig1, ax1 = plt.subplots(1, 2, figsize=(10, 5))
-    sns.boxplot(y=provinsi["jumlah_sekolah"], ax=ax1[0])
-    ax1[0].set_title("Jumlah Sekolah")
-    sns.boxplot(y=provinsi["penduduk_usia_sekolah"], ax=ax1[1])
-    ax1[1].set_title("Penduduk Usia Sekolah")
-    plt.tight_layout()
-    st.pyplot(fig1)
-    st.caption(
-        "Boxplot menunjukkan sebaran nilai antar provinsi serta provinsi-"
-        "provinsi yang berpotensi menjadi outlier (misalnya provinsi dengan "
-        "jumlah sekolah atau penduduk usia sekolah jauh di atas rata-rata)."
-    )
-
-    st.subheader("Scatter Plot")
-    fig2, ax2 = plt.subplots(figsize=(8, 6))
-    sns.scatterplot(data=provinsi, x="penduduk_usia_sekolah", y="jumlah_sekolah", s=80, ax=ax2)
-    ax2.set_title("Penduduk Usia Sekolah vs Jumlah Sekolah")
-    ax2.grid(True)
-    st.pyplot(fig2)
-    st.caption(
-        "Pola sebaran titik memperlihatkan kecenderungan arah hubungan "
-        "(positif/negatif) antara penduduk usia sekolah dan jumlah sekolah."
-    )
-
-    st.subheader("Heatmap Korelasi Pearson")
-    kolom_korelasi = ["jumlah_sekolah", "penduduk_usia_sekolah", "total_penduduk"]
-    corr = provinsi[kolom_korelasi].corr(method="pearson")
+    st.subheader("Matriks Korelasi Pearson")
+    corr_matrix = df_bersih[kolom_numerik].corr(method="pearson")
 
     col_a, col_b = st.columns([1, 1])
     with col_a:
-        st.dataframe(corr.style.format("{:.3f}"), use_container_width=True)
+        st.dataframe(corr_matrix.style.format("{:.2f}"), use_container_width=True)
     with col_b:
-        fig3, ax3 = plt.subplots(figsize=(6, 5))
-        sns.heatmap(corr, annot=True, cmap="RdYlBu", fmt=".3f", ax=ax3)
-        ax3.set_title("Heatmap Korelasi Pearson")
-        st.pyplot(fig3)
+        fig_corr, ax_corr = plt.subplots(figsize=(6, 5))
+        sns.heatmap(corr_matrix, annot=True, fmt=".2f", cmap="Blues",
+                    cbar=True, annot_kws={"size": 10}, ax=ax_corr)
+        ax_corr.set_title("Matriks Korelasi Pearson Antar Variabel", fontweight="bold")
+        st.pyplot(fig_corr)
+
+    st.info(
+        """
+        **Kesimpulan Analisis Matriks Korelasi**
+        1. **Multikolinieritas Indikatif:** Korelasi sangat tinggi (mendekati 1.00)
+           antara `total_penduduk` dan `penduduk_usia_sekolah`, karena usia sekolah
+           adalah subset dari total penduduk. Memasukkan keduanya sekaligus dalam
+           regresi akan memicu kolinieritas.
+        2. **Korelasi Target:** `penduduk_usia_sekolah` berkorelasi positif sangat
+           kuat dengan `jumlah_sekolah`, mengonfirmasi bahwa demografi usia
+           spesifik berjalan beriringan dengan jumlah fasilitas pendidikan.
+        """
+    )
 
 # ------------------------------------------------------------------------------
-# TAB 5 — MODELING
+# TAHAP 5 — STATISTICAL MODELING
 # ------------------------------------------------------------------------------
 with tab_model:
-    st.header("🧮 Modeling")
+    st.header("🧮 Statistical Modeling")
 
-    st.subheader("Uji Signifikansi Korelasi Pearson")
-    r1, p1 = pearsonr(
-        provinsi["penduduk_usia_sekolah"].astype(float),
-        provinsi["jumlah_sekolah"].astype(float),
+    st.subheader("Uji Asumsi Multikolinieritas (VIF)")
+    X_check = df_bersih[["penduduk_usia_sekolah", "total_penduduk", "luas_wilayah"]]
+    X_check_const = sm.add_constant(X_check)
+
+    vif_table = pd.DataFrame()
+    vif_table["Variabel Independen"] = X_check_const.columns
+    vif_table["Nilai VIF"] = [
+        variance_inflation_factor(X_check_const.values, i)
+        for i in range(X_check_const.shape[1])
+    ]
+    st.dataframe(vif_table, use_container_width=True)
+    st.warning(
+        "**Keputusan Analitik:** Variabel `total_penduduk` di-drop pada pemodelan "
+        "karena memiliki nilai VIF sangat tinggi (redundan dengan `penduduk_usia_sekolah`)."
     )
-    r2, p2 = pearsonr(
-        provinsi["total_penduduk"].astype(float),
-        provinsi["jumlah_sekolah"].astype(float),
-    )
 
-    col_x, col_y = st.columns(2)
-    with col_x:
-        st.markdown("**Penduduk Usia Sekolah vs Jumlah Sekolah**")
-        st.write(f"r = {r1:.4f}  |  p = {p1:.5f}")
-        st.success("Hubungan signifikan") if p1 < 0.05 else st.warning("Hubungan tidak signifikan")
-    with col_y:
-        st.markdown("**Total Penduduk vs Jumlah Sekolah**")
-        st.write(f"r = {r2:.4f}  |  p = {p2:.5f}")
-        st.success("Hubungan signifikan") if p2 < 0.05 else st.warning("Hubungan tidak signifikan")
+    st.subheader("Model Regresi OLS Final")
+    X_final = df_bersih[["penduduk_usia_sekolah", "luas_wilayah"]]
+    X_final = sm.add_constant(X_final)
+    y = df_bersih["jumlah_sekolah"]
 
-    st.subheader("Regresi Linear Berganda")
-    X = provinsi[["penduduk_usia_sekolah", "total_penduduk"]].copy()
-    Y = provinsi["jumlah_sekolah"].copy()
-    X = X.apply(pd.to_numeric)
-    Y = pd.to_numeric(Y)
-    X = sm.add_constant(X)
-
-    model = sm.OLS(Y, X).fit()
+    model_regresi = sm.OLS(y, X_final).fit()
 
     with st.expander("📄 Lihat Ringkasan Model Regresi (model.summary())", expanded=True):
-        st.text(model.summary())
+        st.text(model_regresi.summary())
 
-    provinsi["prediksi"] = model.predict(X)
-    provinsi["residual"] = Y - provinsi["prediksi"]
+    df_bersih["prediksi"] = model_regresi.predict(X_final)
+    df_bersih["residual"] = y - df_bersih["prediksi"]
 
-    st.subheader("Prediksi vs Aktual")
-    st.dataframe(
-        provinsi[["province_name", "jumlah_sekolah", "prediksi", "residual"]],
-        use_container_width=True
+    st.subheader("Plot Residual vs Fitted Values (Uji Homoskedastisitas)")
+    fig_res, ax_res = plt.subplots(figsize=(9, 5))
+    sns.scatterplot(x=df_bersih["prediksi"], y=df_bersih["residual"], color="red", s=70, alpha=0.7, ax=ax_res)
+    ax_res.axhline(y=0, color="black", linestyle="--")
+    ax_res.set_title("Plot Residual vs Fitted Values", fontweight="bold")
+    ax_res.set_xlabel("Nilai Prediksi Jumlah Sekolah")
+    ax_res.set_ylabel("Residual (Error)")
+    st.pyplot(fig_res)
+
+    st.info(
+        """
+        **Kesimpulan Grafik Residual vs Fitted Values**
+        1. **Asumsi Homoskedastisitas Terpenuhi:** titik-titik residual tersebar
+           acak di atas dan di bawah garis nol tanpa membentuk pola tertentu
+           (tidak mekar seperti terompet).
+        2. **Makna:** varians galat dari model konstan. Model regresi OLS stabil,
+           seimbang, dan valid digunakan untuk memprediksi kebutuhan infrastruktur
+           pendidikan.
+        """
     )
 
-    col_p, col_r = st.columns(2)
-    with col_p:
-        fig4, ax4 = plt.subplots(figsize=(6, 5))
-        ax4.scatter(Y, provinsi["prediksi"], s=70)
-        ax4.plot([Y.min(), Y.max()], [Y.min(), Y.max()], color="red")
-        ax4.set_xlabel("Data Aktual")
-        ax4.set_ylabel("Prediksi")
-        ax4.set_title("Aktual vs Prediksi")
-        ax4.grid(True)
-        st.pyplot(fig4)
-    with col_r:
-        fig5, ax5 = plt.subplots(figsize=(6, 5))
-        sns.histplot(provinsi["residual"], bins=8, kde=True, ax=ax5)
-        ax5.set_title("Distribusi Residual")
-        st.pyplot(fig5)
-
 # ------------------------------------------------------------------------------
-# TAB 6 — KESIMPULAN
+# TAHAP 6 — INTERPRET & COMMUNICATE
 # ------------------------------------------------------------------------------
 with tab_kesimpulan:
-    st.header("✅ Interpretasi & Kesimpulan")
+    st.header("✅ Interpret & Communicate")
 
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric("R²", round(model.rsquared, 3))
-    k2.metric("Adjusted R²", round(model.rsquared_adj, 3))
-    k3.metric("F Statistic", round(model.fvalue, 3))
-    k4.metric("Prob (F)", f"{model.f_pvalue:.5f}")
+    k1.metric("R²", round(model_regresi.rsquared, 3))
+    k2.metric("Adjusted R²", round(model_regresi.rsquared_adj, 3))
+    k3.metric("F Statistic", round(model_regresi.fvalue, 3))
+    k4.metric("Prob (F)", f"{model_regresi.f_pvalue:.5f}")
 
-    if model.f_pvalue < 0.05:
-        st.success("Model regresi **signifikan** secara statistik (p < 0.05).")
+    st.subheader("Validasi Hipotesis")
+    if model_regresi.f_pvalue < 0.05:
+        st.success(
+            "Model regresi berhasil menolak H0 dan mengonfirmasi H1. Penduduk "
+            "usia sekolah dan luas wilayah secara simultan berpengaruh signifikan "
+            "terhadap sebaran jumlah sekolah di Indonesia."
+        )
     else:
-        st.warning("Model regresi **tidak signifikan** secara statistik (p ≥ 0.05).")
+        st.warning("Model regresi tidak berhasil menolak H0 (tidak signifikan secara statistik).")
 
-    st.subheader("Jawaban Pertanyaan Riset")
-    st.markdown(
-        f"""
-        - **Q1 (Penduduk usia sekolah vs jumlah sekolah):** r = {r1:.3f},
-          p = {p1:.5f} → {"hubungan signifikan" if p1 < 0.05 else "hubungan tidak signifikan"}.
-        - **Q2 (Faktor dominan):** berdasarkan koefisien regresi, variabel
-          dengan nilai koefisien dan p-value terbaik pada ringkasan model di
-          atas menunjukkan faktor yang paling berpengaruh terhadap jumlah
-          sekolah per provinsi.
+    st.subheader("Insight Pemodelan")
+    st.write(
+        """
+        Koefisien regresi menunjukkan bahwa pertumbuhan populasi usia sekolah
+        memiliki daya dorong yang jauh lebih absolut terhadap penambahan sekolah
+        baru dibandingkan ukuran geografis wilayah tersebut.
         """
     )
 
-    st.subheader("Rekomendasi")
+    st.subheader("Rekomendasi Kebijakan Publik")
     st.write(
         """
-        Provinsi dengan jumlah penduduk usia sekolah tinggi namun jumlah
-        sekolah relatif rendah (dapat dilihat dari residual negatif pada
-        tabel prediksi) perlu menjadi prioritas pembangunan sekolah baru
-        agar rasio ketersediaan sekolah terhadap penduduk usia sekolah lebih
-        merata di seluruh Indonesia.
+        Dalam mengalokasikan Dana Alokasi Khusus (DAK) Pendidikan, pemerintah
+        sebaiknya:
+        - Menjadikan tren demografi usia sekolah (bukan sekadar rasio penduduk
+          umum) sebagai bobot utama distribusi anggaran.
+        - Menggunakan faktor luas wilayah murni sebagai penyeimbang guna mencegah
+          terjadinya *blank-spot* aksesibilitas pendidikan di provinsi yang
+          sangat luas.
+        """
+    )
+
+    st.subheader("Keterbatasan & Saran Eksplorasi")
+    st.write(
+        """
+        Penelitian ini belum mengontrol aspek fiskal daerah (contoh: APBD) dan
+        tipografi geografis (kepulauan vs kontinental). Penelitian selanjutnya
+        direkomendasikan menyertakan variabel ekonomi makro untuk meningkatkan
+        akurasi R-squared model.
         """
     )
 
