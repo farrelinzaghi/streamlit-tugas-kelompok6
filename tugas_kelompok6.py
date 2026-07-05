@@ -136,27 +136,6 @@ with tab_data:
     st.write(f"**Dimensi Dataset:** {df_mentah.shape[0]:,} Baris, {df_mentah.shape[1]} Kolom")
     st.dataframe(df_mentah.head(10), use_container_width=True)
 
-    @st.cache_data
-    def buat_data_provinsi(df_mentah):
-        df_valid = df_mentah.dropna(subset=[
-            "province_name", "school_name", "total_population",
-            "total_education_age_population", "province_area"
-        ]).drop_duplicates()
-
-        provinsi = df_valid.groupby("province_name", as_index=False).agg(
-            jumlah_sekolah=("school_name", "count"),
-            total_penduduk=("total_population", "max"),
-            penduduk_usia_sekolah=("total_education_age_population", "max"),
-            luas_wilayah=("province_area", "max"),
-        )
-        return provinsi
-
-    df = buat_data_provinsi(df_mentah)
-
-    st.subheader("Data Teragregasi per Provinsi")
-    st.write(f"**Dimensi Dataset:** {df.shape[0]} Baris (Provinsi), {df.shape[1]} Kolom")
-    st.dataframe(df.head(10), use_container_width=True)
-
 # ------------------------------------------------------------------------------
 # TAHAP 3 — DATA CLEANING
 # ------------------------------------------------------------------------------
