@@ -12,6 +12,7 @@ Cara menjalankan:
 ==============================================================================
 """
 
+import glob
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -93,34 +94,66 @@ with tab_data:
     st.header("📥 Data Collection")
 
     st.caption(
-        "Dataset pada tahap ini disimulasikan (bukan data riil) mengikuti "
-        "pola hubungan penduduk usia sekolah dan luas wilayah terhadap "
-        "jumlah sekolah, sesuai skrip asli tugas kelompok."
+        "Dataset yang digunakan adalah data riil sebaran sekolah per provinsi "
+        "di Indonesia (`complete_data.csv`), bukan data simulasi."
     )
 
-    n_prov = st.sidebar.slider("Jumlah Provinsi (simulasi)", min_value=10, max_value=50, value=38)
-    seed = st.sidebar.number_input("Random Seed", min_value=0, value=42, step=1)
+    @st.cache_data
+    def muat_data_default():
+        kandidat = glob.glob("complete_data*.csv")
+        if kandidat:
+            return pd.read_csv(kandidat[0]), kandidat[0]
+        return None, None
+
+    df_default, nama_file_default = muat_data_default()
+
+    file_upload = st.sidebar.file_uploader("Unggah file CSV lain (opsional)", type=["csv"])
+
+    if file_upload is not None:
+        df_mentah = pd.read_csv(file_upload)
+        sumber_data = file_upload.name
+    elif df_default is not None:
+        df_mentah = df_default
+        sumber_data = nama_file_default
+        st.sidebar.success(f"Memuat otomatis: {nama_file_default}")
+    else:
+        st.sidebar.warning("complete_data.csv tidak ditemukan. Silakan unggah file CSV.")
+        st.stop()
+
+    kolom_wajib = {
+        "province_name", "school_name", "total_population",
+        "total_education_age_population", "province_area"
+    }
+    if not kolom_wajib.issubset(set(df_mentah.columns)):
+        st.error(
+            "File CSV tidak memiliki kolom yang dibutuhkan: "
+            f"{', '.join(sorted(kolom_wajib))}"
+        )
+        st.stop()
+
+    st.subheader("Inspeksi Awal Data (Level Sekolah)")
+    st.caption(f"Sumber data: `{sumber_data}`")
+    st.write(f"**Dimensi Dataset:** {df_mentah.shape[0]:,} Baris, {df_mentah.shape[1]} Kolom")
+    st.dataframe(df_mentah.head(10), use_container_width=True)
 
     @st.cache_data
-    def buat_dataset(n_prov, seed):
-        np.random.seed(seed)
-        total_pop = np.random.normal(3000000, 1000000, n_prov)
-        school_age = total_pop * np.random.uniform(0.18, 0.22, n_prov)
-        area = np.random.normal(50000, 15000, n_prov)
-        schools = (school_age * 0.003) + (area * 0.01) + np.random.normal(0, 100, n_prov)
+    def buat_data_provinsi(df_mentah):
+        df_valid = df_mentah.dropna(subset=[
+            "province_name", "school_name", "total_population",
+            "total_education_age_population", "province_area"
+        ]).drop_duplicates()
 
-        df = pd.DataFrame({
-            "provinsi": [f"Provinsi_{i+1}" for i in range(n_prov)],
-            "penduduk_usia_sekolah": school_age.astype(int),
-            "total_penduduk": total_pop.astype(int),
-            "luas_wilayah": area.astype(int),
-            "jumlah_sekolah": schools.astype(int),
-        })
-        return df
+        provinsi = df_valid.groupby("province_name", as_index=False).agg(
+            jumlah_sekolah=("school_name", "count"),
+            total_penduduk=("total_population", "max"),
+            penduduk_usia_sekolah=("total_education_age_population", "max"),
+            luas_wilayah=("province_area", "max"),
+        )
+        return provinsi
 
-    df = buat_dataset(n_prov, seed)
+    df = buat_data_provinsi(df_mentah)
 
-    st.subheader("Inspeksi Awal Data")
+    st.subheader("Data Teragregasi per Provinsi")
     st.write(f"**Dimensi Dataset:** {df.shape[0]} Baris (Provinsi), {df.shape[1]} Kolom")
     st.dataframe(df.head(10), use_container_width=True)
 
